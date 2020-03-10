@@ -241,12 +241,35 @@
 	*/
 	Tree.prototype.setInitialStates = function (node, level) {
 
-		if (!node.nodes) return;
+		// if (!node.nodes) return;
+		if (!node.nodes) {
+			node.nodes = [];
+		};
 		level += 1;
 
 		var parent = node;
 		var _this = this;
-		$.each(node.nodes, function checkStates(index, node) {
+
+		var _nodes = node.nodes;
+		var addNewIndex;
+		var hasAddNew = _nodes.some(function(node, index) {
+			addNewIndex = index;
+			return node.isAddNewNode;
+		});
+		if (!hasAddNew) {
+			_nodes.push({
+				parentId: parent.nodeId,
+				isAddNewNode: true,
+				text: '+ 添加'
+			});
+		} else {
+			_nodes.push(_nodes.splice(addNewIndex, 1)[0]);
+		}
+
+		$.each(_nodes, function checkStates(index, node) {
+			if (node.isAddNewNode) {
+				return;
+			}
 
 			// nodeId : unique, incremental identifier
 			node.nodeId = _this.nodes.length;
@@ -291,6 +314,13 @@
 
 			// index nodes in a flattened structure for use later
 			_this.nodes.push(node);
+
+			// if (_nodes.length === index + 1) {
+			// 	_nodes.push({
+			// 		isAddNewNode: true,
+			// 		text: '+ 添加'
+			// 	});
+			// }
 
 			// recurse child nodes and transverse the tree
 			if (node.nodes) {
@@ -394,12 +424,12 @@
 	};
 
 	Tree.prototype.toggleExpandedState = function (node, options) {
-		if (!node) return;
+		if (!node || node.isAddNewNode) return;
 		this.setExpandedState(node, !node.state.expanded, options);
 	};
 
 	Tree.prototype.setExpandedState = function (node, state, options) {
-
+		if (!node || node.isAddNewNode) return;
 		if (state === node.state.expanded) return;
 
 		if (state && node.nodes) {
@@ -428,12 +458,12 @@
 	};
 
 	Tree.prototype.toggleSelectedState = function (node, options) {
-		if (!node) return;
+		if (!node || node.isAddNewNode) return;
 		this.setSelectedState(node, !node.state.selected, options);
 	};
 
 	Tree.prototype.setSelectedState = function (node, state, options) {
-
+		if (!node || node.isAddNewNode) return;
 		if (state === node.state.selected) return;
 
 		if (state) {
@@ -462,12 +492,12 @@
 	};
 
 	Tree.prototype.toggleCheckedState = function (node, options) {
-		if (!node) return;
+		if (!node || node.isAddNewNode) return;
 		this.setCheckedState(node, !node.state.checked, options);
 	};
 
 	Tree.prototype.setCheckedState = function (node, state, options) {
-
+		if (!node || node.isAddNewNode) return;
 		if (state === node.state.checked) return;
 
 		if (state) {
@@ -490,7 +520,7 @@
 	};
 
 	Tree.prototype.setDisabledState = function (node, state, options) {
-
+		if (!node || node.isAddNewNode) return;
 		if (state === node.state.disabled) return;
 
 		if (state) {
@@ -555,6 +585,36 @@
 		}
 
 		$.each(nodes, function addNodes(id, node) {
+			if (node.isAddNewNode) {
+				var addNewItem = $(_this.template.addNew).addClass('node-' + _this.elementId);
+				for (var i = 0; i < (level - 1); i++) {
+					addNewItem.append(_this.template.indent);
+				}
+				addNewItem.append($(_this.template.icon));
+				if (_this.options.showIcon) {
+					var classList = ['node-icon'];
+					classList.push(node.icon || _this.options.nodeIcon);
+					addNewItem.append(
+						$(_this.template.icon)
+						.addClass(classList.join(' '))
+					);
+				}
+				if (_this.options.showCheckbox) {
+					var classList = ['check-icon'];
+					addNewItem.append(
+						$(_this.template.icon)
+						.addClass(classList.join(' '))
+					);
+				}
+				var parentId = node.parentId;
+				var addNewContainer = $(_this.template.addNewContainer)
+					.attr('data-parent-id', parentId)
+					.append(_this.template.addNewLink);
+				addNewItem.append(addNewContainer);
+				_this.$wrapper.append(addNewItem);
+
+				return;
+			}
 
 			var treeItem = $(_this.template.item)
 				.addClass('node-' + _this.elementId)
@@ -565,18 +625,18 @@
 				.attr('data-nodeid', node.nodeId)
 				.attr('style', _this.buildStyleOverride(node));
 			
-			var addNewItem;
-			if (nodes.length === id + 1) {
-				addNewItem = $(_this.template.addNew)
-					.addClass('node-' + _this.elementId);
-			}
+			// var addNewItem;
+			// if (nodes.length === id + 1) {
+			// 	addNewItem = $(_this.template.addNew)
+			// 		.addClass('node-' + _this.elementId);
+			// }
 			
 			// Add indent/spacer to mimic tree structure
 			for (var i = 0; i < (level - 1); i++) {
 				treeItem.append(_this.template.indent);
 
-				addNewItem && 
-					addNewItem.append(_this.template.indent);
+				// addNewItem && 
+				// 	addNewItem.append(_this.template.indent);
 			}
 
 			// Add expand, collapse or empty spacer icons
@@ -599,10 +659,10 @@
 					.addClass(classList.join(' '))
 				);
 
-			addNewItem && 
-				addNewItem.append($(_this.template.icon)
-					.addClass(classList.join(' '))
-				);
+			// addNewItem && 
+			// 	addNewItem.append($(_this.template.icon)
+			// 		.addClass(classList.join(' '))
+			// 	);
 
 
 			// Add node icon
@@ -622,10 +682,10 @@
 						.addClass(classList.join(' '))
 					);
 
-				addNewItem && 
-					addNewItem.append($(_this.template.icon)
-						.addClass(classList.join(' '))
-					);
+				// addNewItem && 
+				// 	addNewItem.append($(_this.template.icon)
+				// 		.addClass(classList.join(' '))
+				// 	);
 			}
 
 			// Add check / unchecked icon
@@ -644,10 +704,10 @@
 						.addClass(classList.join(' '))
 					);
 
-				addNewItem && 
-					addNewItem.append($(_this.template.icon)
-						.addClass(classList.join(' '))
-					);
+				// addNewItem && 
+				// 	addNewItem.append($(_this.template.icon)
+				// 		.addClass(classList.join(' '))
+				// 	);
 			}
 
 			// Add text
@@ -678,14 +738,14 @@
 			// Add item to the tree
 			_this.$wrapper.append(treeItem);
 
-			if (nodes.length === id + 1) {
-				var parentId = node.parentId;
-				var addNewContainer = $(_this.template.addNewContainer)
-					.attr('data-parent-id', parentId)
-					.append(_this.template.addNewLink);
-				addNewItem.append(addNewContainer);
-				_this.$wrapper.append(addNewItem);
-			}
+			// if (nodes.length === id + 1) {
+			// 	var parentId = node.parentId;
+			// 	var addNewContainer = $(_this.template.addNewContainer)
+			// 		.attr('data-parent-id', parentId)
+			// 		.append(_this.template.addNewLink);
+			// 	addNewItem.append(addNewContainer);
+			// 	_this.$wrapper.append(addNewItem);
+			// }
 
 			// Recursively add child ndoes
 			if (node.nodes && node.state.expanded && !node.state.disabled) {

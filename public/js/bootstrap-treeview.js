@@ -1,22 +1,3 @@
-/* =========================================================
- * bootstrap-treeview.js v1.2.0
- * =========================================================
- * Copyright 2013 Jonathan Miles
- * Project URL : http://www.jondmiles.com/bootstrap-treeview
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * ========================================================= */
-
 ;(function ($, window, document, undefined) {
 
 	/*global jQuery, console*/
@@ -99,6 +80,10 @@
 			// Initialize / destroy methods
 			init: $.proxy(this.init, this),
 			remove: $.proxy(this.remove, this),
+
+			// Add Nodes Method
+            addNodes: $.proxy(this.addNodes, this),
+            addNode: $.proxy(this.addNode, this),
 
 			// Get methods
 			getNode: $.proxy(this.getNode, this),
@@ -314,34 +299,107 @@
 		});
 	};
 
+	Tree.prototype.clickAddNewLink = function (event) {
+		var target = $(event.target);
+		var container = target.closest('.tree-add-new-container');
+		container.addClass('tree-add-new-container--edit');
+		container.empty();
+		container.append(this.template.addNewInput);
+		container.append(this.template.addNewSave);
+		container.append(this.template.addNewCancel);
+		container.find('input').focus();
+		event.stopPropagation();
+		event.preventDefault();
+	}
+
+	Tree.prototype.clickAddNewSave = function (event) {
+		var target = $(event.target);
+		var container = target.closest('.tree-add-new-container');
+		var newText = container.find('input').val();
+		var parentId = container.attr('data-parent-id');
+		var parentNode = this.nodes[parentId];
+
+		if(!newText) {
+			return;
+		}
+
+		if (parentNode) {
+			this.addNode(parentNode, {
+				node: {
+					text: newText
+				}
+			});
+		} else {
+			if (!this.tree) {
+				this.tree = []
+			}
+			this.tree.push({ text: newText });
+			this.setInitialStates({ nodes: this.tree }, 0);
+			this.render();
+		}
+		container.removeClass('tree-add-new-container--edit');
+		event.stopPropagation();
+		event.preventDefault();
+	}
+
+	Tree.prototype.clickAddNewCancel = function (event) {
+		var target = $(event.target);
+		var container = target.closest('.tree-add-new-container');
+		container.empty();
+		var addNewLink = $(this.template.addNewLink);
+		var level = parseInt(container.attr('data-level'), 10);
+		addNewLink.text('+ 添加' + this.getLevelWording(level) + '级品类');
+
+		container.append(addNewLink);
+		container.removeClass('tree-add-new-container--edit');
+		event.stopPropagation();
+		event.preventDefault();
+	}
+
 	Tree.prototype.clickHandler = function (event) {
 
 		if (!this.options.enableLinks) event.preventDefault();
 
 		var target = $(event.target);
 		var node = this.findNode(target);
-		if (!node || node.state.disabled) return;
-		
 		var classList = target.attr('class') ? target.attr('class').split(' ') : [];
+
+		if (target && !node ) {
+			if (classList.indexOf('tree-add-new-link') !== -1) {
+				this.clickAddNewLink(event);
+			} else if (classList.indexOf('tree-add-new-btn--save') !== -1) {
+				this.clickAddNewSave(event);
+			} else if (classList.indexOf('tree-add-new-btn--cancel') !== -1) {
+				this.clickAddNewCancel(event);
+			}
+		}
+
+		if (!node || node.state.disabled) {
+			return;
+		};
+		
 		if ((classList.indexOf('expand-icon') !== -1)) {
 
 			this.toggleExpandedState(node, _default.options);
 			this.render();
-		}
-		else if ((classList.indexOf('check-icon') !== -1)) {
-			
+		} else if ((classList.indexOf('check-icon') !== -1)) {
 			this.toggleCheckedState(node, _default.options);
 			this.render();
-		}
-		else {
-			
-			if (node.selectable) {
-				this.toggleSelectedState(node, _default.options);
-			} else {
-				this.toggleExpandedState(node, _default.options);
+		} else if ((classList.indexOf('tree-add-new-link') !== -1)) {
+			this.clickAddNewLink(event);
+		} else if (classList.indexOf('tree-add-new-btn--save') !== -1) {
+			this.clickAddNewSave(event);
+		} else if (classList.indexOf('tree-add-new-btn--cancel') !== -1) {
+			this.clickAddNewCancel(event);
+		} else {
+			if (!target.closest('.list-group-item').find('input').length) {
+				if (node.selectable) {
+					this.toggleSelectedState(node, _default.options);
+				} else {
+					this.toggleExpandedState(node, _default.options);
+				}
+				this.render();
 			}
-
-			this.render();
 		}
 	};
 
@@ -499,6 +557,17 @@
 
 		// Build tree
 		this.buildTree(this.tree, 0);
+
+		if(!this.tree.length) {
+			var addNewItem = $(this.template.addNew)
+					.addClass('node-' + this.elementId);
+			var addNewLink = $(this.template.addNewLink);
+			addNewLink.text('+ 添加' + this.getLevelWording(1) + '级品类');
+			var addNewContainer = $(this.template.addNewContainer)
+					.append(addNewLink);
+			addNewItem.append(addNewContainer);
+			this.$wrapper.append(addNewItem);
+		}
 	};
 
 	// Starting from the root node, and recursing down the
@@ -509,6 +578,7 @@
 		level += 1;
 
 		var _this = this;
+
 		$.each(nodes, function addNodes(id, node) {
 
 			var treeItem = $(_this.template.item)
@@ -519,10 +589,19 @@
 				.addClass(node.searchResult ? 'search-result' : '') 
 				.attr('data-nodeid', node.nodeId)
 				.attr('style', _this.buildStyleOverride(node));
-
+			
+			var addNewItem;
+			if (nodes.length === id + 1) {
+				addNewItem = $(_this.template.addNew)
+					.addClass('node-' + _this.elementId);
+			}
+			
 			// Add indent/spacer to mimic tree structure
 			for (var i = 0; i < (level - 1); i++) {
 				treeItem.append(_this.template.indent);
+
+				addNewItem && 
+					addNewItem.append(_this.template.indent);
 			}
 
 			// Add expand, collapse or empty spacer icons
@@ -545,6 +624,11 @@
 					.addClass(classList.join(' '))
 				);
 
+			// addNewItem && 
+			// 	addNewItem.append($(_this.template.icon)
+			// 		.addClass(classList.join(' '))
+			// 	);
+
 
 			// Add node icon
 			if (_this.options.showIcon) {
@@ -560,6 +644,11 @@
 
 				treeItem
 					.append($(_this.template.icon)
+						.addClass(classList.join(' '))
+					);
+
+				addNewItem && 
+					addNewItem.append($(_this.template.icon)
 						.addClass(classList.join(' '))
 					);
 			}
@@ -579,21 +668,27 @@
 					.append($(_this.template.icon)
 						.addClass(classList.join(' '))
 					);
+
+				addNewItem && 
+					addNewItem.append($(_this.template.icon)
+						.addClass(classList.join(' '))
+					);
 			}
 
 			// Add text
+			var textNode = $('<span class="tree-node-text"><i>' + node.text + '<i></span>');
 			if (_this.options.enableLinks) {
 				// Add hyperlink
 				treeItem
 					.append($(_this.template.link)
 						.attr('href', node.href)
-						.append(node.text)
+						.append(textNode)
 					);
 			}
 			else {
 				// otherwise just text
 				treeItem
-					.append(node.text);
+					.append(textNode);
 			}
 
 			// Add tags as badges
@@ -606,15 +701,65 @@
 				});
 			}
 
+			if (!node.nodes || !node.nodes.length) {
+				var parentId = node.nodeId;
+				var addNewLink = $(_this.template.addNewLink);
+				addNewLink.text('+ 添加' + _this.getLevelWording(level + 1) + '级品类');
+
+				var addNewContainer = $(_this.template.addNewContainer)
+					.attr('data-parent-id', parentId)
+					.attr('data-level', level + 1)
+					.addClass('tree-add-new-container--inline')
+					.append(addNewLink);
+				textNode.append(addNewContainer);
+			}
+
 			// Add item to the tree
 			_this.$wrapper.append(treeItem);
 
 			// Recursively add child ndoes
 			if (node.nodes && node.state.expanded && !node.state.disabled) {
-				return _this.buildTree(node.nodes, level);
+				_this.buildTree(node.nodes, level);
+			}
+
+			if (nodes.length === id + 1) {
+				var parentId = node.parentId;
+				var addNewLink = $(_this.template.addNewLink);
+				addNewLink.text('+ 添加' + _this.getLevelWording(1) + '级品类');
+				var addNewContainer = $(_this.template.addNewContainer)
+					.attr('data-parent-id', parentId)
+					.attr('data-level', 1)
+					.append(addNewLink);
+				addNewItem.append(addNewContainer);
+				_this.$wrapper.append(addNewItem);
 			}
 		});
 	};
+
+	Tree.prototype.getLevelWording = function (index) {
+		switch (index) {
+			case 1:
+				return '一';
+			case 2:
+				return '二';
+			case 3:
+				return '三';
+			case 4:
+				return '四';
+			case 5:
+				return '五';
+			case 6:
+				return '六';
+			case 7:
+				return '七';
+			case 8:
+				return '八';
+			case 9:
+				return '九';
+			case 10:
+				return '十';
+		}
+	}
 
 	// Define any node level style override for
 	// 1. selectedNode
@@ -692,10 +837,16 @@
 		indent: '<span class="indent"></span>',
 		icon: '<span class="icon"></span>',
 		link: '<a href="#" style="color:inherit;"></a>',
+		addNew: '<li class="list-group-item tree-add-new-item"></li>',
+		addNewContainer: '<span class="tree-add-new-container"></span>',
+		addNewLink: '<a href="javascript:void(0)" class="tree-add-new-link">+ 添加</a>',
+		addNewInput: '<input class="tree-add-new-input" />',
+		addNewSave: '<span class="tree-add-new-btn tree-add-new-btn--save"></span>',
+		addNewCancel: '<span class="tree-add-new-btn tree-add-new-btn--cancel"></span>',
 		badge: '<span class="badge"></span>'
 	};
 
-	Tree.prototype.css = '.treeview .list-group-item{cursor:pointer}.treeview span.indent{margin-left:10px;margin-right:10px}.treeview span.icon{width:12px;margin-right:5px}.treeview .node-disabled{color:silver;cursor:not-allowed}'
+	Tree.prototype.css = '.treeview .list-group-item{cursor:pointer}.treeview span.indent{margin-left:10px;margin-right:10px}.treeview span.icon{width:auto;margin-right:0}.treeview .node-disabled{color:silver;cursor:not-allowed}'
 
 
 	/**
@@ -1205,6 +1356,56 @@
 				return undefined;
 			}
 		}
+	};
+
+	/**
+	 * 批量给节点添加子节点
+	 * @param {Object|Number} identifiers - A valid node, node id or array of node identifiers
+	 * @param {optional Object} options.node; 
+	 */
+	Tree.prototype.addNodes = function (identifiers, options) {
+	    this.forEachIdentifier(identifiers, options, $.proxy(function (node, options) {
+            this.setAddNodes(node, options);
+	    }, this));
+
+	    this.setInitialStates({ nodes: this.tree }, 0);
+	    this.render();
+	};
+
+	/**
+	 * 添加子节点
+	 */
+	Tree.prototype.setAddNodes = function (node, options) {
+	    if (node.nodes == null) node.nodes = [];
+	    if (options.nodes) {
+	        $.each(options.nodes, function (index,option) {
+	            node.nodes.push(option);
+	        })
+	    }
+	};
+
+	/**
+	 * 单个给节点添加子节点
+	 * @param {Object|Number} identifiers - A valid node, node id or array of node identifiers
+	 * @param {optional Object} options.node; 
+	 */
+	Tree.prototype.addNode = function (identifiers, options) {
+	    this.forEachIdentifier(identifiers, options, $.proxy(function (node, options) {
+            this.setAddNode(node, options);
+	    }, this));
+
+	    this.setInitialStates({ nodes: this.tree }, 0);
+	    this.render();
+	};
+
+	/**
+	 * 添加子节点
+	 */
+	Tree.prototype.setAddNode = function (node, options) {
+	    if (node.nodes == null) node.nodes = [];
+	    if (options.node) {
+            node.nodes.push(options.node);
+	    }
 	};
 
 	var logError = function (message) {
